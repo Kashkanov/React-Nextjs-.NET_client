@@ -1,25 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {useEffect, useState} from "react";
 import {
     HubConnection,
     HubConnectionBuilder,
     LogLevel,
 } from "@microsoft/signalr";
+import 'datatables.net-dt/css/dataTables.dataTables.css';
+import dynamic from "next/dynamic";
+import RecipeForm from "@/app/recipes/recipeform";
+
 
 const Recipes = () => {
 
     const [recipes, setRecipes] = useState([]);
-    const [name, setName] = useState('');
-    const [prepTime, setPrepTime] = useState(0);
-    const [cookTime, setCookTime] = useState(0);
-    const [description, setDescription] = useState('');
-    const [newName, setNewName] = useState('');
-    const [newPrepTime, setNewPrepTime] = useState(0);
-    const [newCookTime, setNewCookTime] = useState(0);
-    const [newDescription, setNewDescription] = useState('');
-
     const [connection, setConnection] = useState(null);
+
+
+    const DataTable = dynamic(
+        async () => {
+            const dtReact = import('datatables.net-react');
+            const dtNet = import(`datatables.net-dt`);
+
+            const [reactMod, dtNetMod] = await Promise.all([dtReact, dtNet]);
+
+            reactMod.default.use(dtNetMod.default);
+            return reactMod.default;
+        },
+        {ssr: false}
+    );
+
 
     useEffect(() => {
         const conn = new HubConnectionBuilder()
@@ -28,19 +38,23 @@ const Recipes = () => {
             .configureLogging(LogLevel.Information)
             .build();
 
-        conn.on("GetRecipes", (data) =>{
+        conn.on("GetRecipes", (data) => {
             setRecipes(data);
-        } )
+        })
 
-        conn.start().
-            then(()=>{
-                conn.on("UpdateRecipes", (newName, newPrepTime, newCookTime, newDescription) => {
-                    setRecipes((prevRecipes) => [...prevRecipes, {name: newName, prepTime: newPrepTime, CookTime: newCookTime, description: newDescription}]);
-                });
+        conn.start().then(() => {
+            conn.on("UpdateRecipes", (newName, newPrepTime, newCookTime, newDescription) => {
+                setRecipes((prevRecipes) => [...prevRecipes, {
+                    name: newName,
+                    prepTime: newPrepTime,
+                    CookTime: newCookTime,
+                    description: newDescription
+                }]);
+            });
             conn.invoke("GetRecipes")
                 .catch(function (err) {
-                console.error("error getting recipes: " + err.toString());
-            });
+                    console.error("error getting recipes: " + err.toString());
+                });
         })
             .catch((err) =>
 
@@ -48,59 +62,34 @@ const Recipes = () => {
             );
 
         setConnection(conn);
+        console.log("Connection state1: ", conn.state);  // Should be 'Connected'
 
     }, []);
 
-    const addRecipe = async () => {
-
-        console.log("Connection state: ", connection);  // Should be 'Connected'
-        if (connection?.state === "Connected") {
-            try {
-                await connection.send("PostRecipe", name, prepTime, cookTime, description);
-                console.log("Recipe sent successfully");
-            } catch (err) {
-                console.error("Error sending recipe:", err.toString());
-            }
-        } else {
-            console.log("SignalR connection not established");
-        }
-    };
-
-
     return (
-        <div>
-            <table>
-                <thead>
+        <div className="w-full">
+            <div className="w-3/4 mx-auto bg-gray-800 rounded-xl p-1">
+                <DataTable id="recipeTable">
+                    <thead>
                     <tr>
-                        <td>Name</td>
-                        <td>Description</td>
-                        <td>Prep Time</td>
-                        <td>Cook Time</td>
-                    </tr>
-                </thead>
-                <tbody>
-                {/*{recipes.map((recipe, index) => (*/}
-                {/*    <li key={index}>{recipe.name}</li>*/}
-                {/*))}*/}
-                {recipes.map((recipe, index) => (
-                    <tr key={index}>
-                        <td className="p-1">{recipe.name}</td>
-                        <td>{recipe.description}</td>
-                        <td>{recipe.prepTime}</td>
-                        <td>{recipe.cookTime}</td>
-                    </tr>
-                ))}
-                </tbody>
-            </table>
-            <div>
+                        <td className="p-4 font-bold">Name</td>
 
-                    <input type="text" placeholder="Name" onChange={(e)=>setName(e.target.value)} />
-                    <input type="number" placeholder="Prep Time"  onChange={(e)=>setPrepTime(Number(e.target.value))}/>
-                    <input type="number" placeholder="Cook Time"  onChange={(e)=>setCookTime(Number(e.target.value))}/>
-                    <input type="text" placeholder="Description"  onChange={(e)=>setDescription(e.target.value)}/>
-                    <button type="submit" onClick={addRecipe}>Submit</button>
+                        <td className="p-4 font-bold">Cook Time</td>
+                    </tr>
+                    </thead>
+                    <tbody>
 
+                    {recipes.map((recipe, index) => (
+                        <tr key={index}>
+                            <td className="px-4">{recipe.name}</td>
+                            <td className="px-4">{recipe.cookTime}</td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </DataTable>
             </div>
+
+            <RecipeForm connection={connection}/>
         </div>
     );
 }
